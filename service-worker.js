@@ -1,17 +1,3 @@
-const CACHE_NAME = 'tacsntoes-v1';
-const urlsToCache = [
-  '/',
-  '/index.html',
-  '/App.jsx',
-  '/styles.css',
-  '/manifest.json',
-  '/favicons/favicon.ico',
-  '/favicons/favicon.svg',
-  '/favicons/favicon-96x96.png',
-  '/favicons/apple-touch-icon.png'
-];
-
-// Install service worker and cache files
 self.addEventListener('install', (event) => {
   event.waitUntil(
     caches.open(CACHE_NAME)
@@ -22,12 +8,10 @@ self.addEventListener('install', (event) => {
   );
 });
 
-// Serve cached content when offline
 self.addEventListener('fetch', (event) => {
   event.respondWith(
     caches.match(event.request)
       .then((response) => {
-        // Cache hit - return response
         if (response) {
           return response;
         }
@@ -37,7 +21,6 @@ self.addEventListener('fetch', (event) => {
   );
 });
 
-// Update service worker
 self.addEventListener('activate', (event) => {
   const cacheWhitelist = [CACHE_NAME];
   event.waitUntil(
