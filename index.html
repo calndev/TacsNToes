@@ -15,6 +15,35 @@
       50% { filter: drop-shadow(0 0 16px rgba(239, 68, 68, 1)); }
     }
     .pulse-red { animation: pulse-glow 1.5s ease-in-out infinite; }
+    
+    input[type="range"] {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 100%;
+      height: 8px;
+      background: #404040;
+      outline: none;
+      border-radius: 4px;
+    }
+    
+    input[type="range"]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 20px;
+      height: 20px;
+      background: #f5f5f5;
+      cursor: pointer;
+      border-radius: 50%;
+    }
+    
+    input[type="range"]::-moz-range-thumb {
+      width: 20px;
+      height: 20px;
+      background: #f5f5f5;
+      cursor: pointer;
+      border-radius: 50%;
+      border: none;
+    }
   </style>
   
   <link rel="manifest" href="manifest.json">
@@ -43,11 +72,15 @@
       const [playerScore, setPlayerScore] = useState(0);
       const [opponentScore, setOpponentScore] = useState(0);
       const [showOpponentLeftModal, setShowOpponentLeftModal] = useState(false);
+      const [showDifficultyModal, setShowDifficultyModal] = useState(false);
+      const [aiDifficulty, setAiDifficulty] = useState(2);
       const [deferredPrompt, setDeferredPrompt] = useState(null);
       const [showInstallButton, setShowInstallButton] = useState(false);
       
       const peerRef = useRef(null);
       const connRef = useRef(null);
+
+      const difficultyNames = ['Easy', 'Regular', 'Hard', 'EXTREME!!!'];
 
       useEffect(() => {
         const handleBeforeInstallPrompt = (e) => {
@@ -97,6 +130,9 @@
 
       const makeAIMove = (currentBoard, currentXMoves, currentOMoves) => {
         setIsAIThinking(true);
+        
+        const randomDelay = 500 + Math.random() * 800;
+        
         setTimeout(() => {
           const emptySquares = currentBoard.map((cell, idx) => cell === null ? idx : null).filter(idx => idx !== null);
           if (emptySquares.length === 0) { setIsAIThinking(false); return; }
@@ -115,10 +151,84 @@
             return null;
           };
 
-          let bestMove = findWinningMove(currentBoard, 'O');
-          if (bestMove === null) bestMove = findWinningMove(currentBoard, 'X');
-          if (bestMove === null) {
-            bestMove = emptySquares.includes(4) ? 4 : emptySquares[Math.floor(Math.random() * emptySquares.length)];
+          const minimax = (board, depth, isMaximizing, alpha, beta) => {
+            const winner = calculateWinner(board);
+            if (winner === 'O') return 10 - depth;
+            if (winner === 'X') return depth - 10;
+            if (board.every(cell => cell !== null)) return 0;
+
+            if (isMaximizing) {
+              let maxEval = -Infinity;
+              for (let i = 0; i < 9; i++) {
+                if (board[i] === null) {
+                  board[i] = 'O';
+                  const evaluation = minimax(board, depth + 1, false, alpha, beta);
+                  board[i] = null;
+                  maxEval = Math.max(maxEval, evaluation);
+                  alpha = Math.max(alpha, evaluation);
+                  if (beta <= alpha) break;
+                }
+              }
+              return maxEval;
+            } else {
+              let minEval = Infinity;
+              for (let i = 0; i < 9; i++) {
+                if (board[i] === null) {
+                  board[i] = 'X';
+                  const evaluation = minimax(board, depth + 1, true, alpha, beta);
+                  board[i] = null;
+                  minEval = Math.min(minEval, evaluation);
+                  beta = Math.min(beta, evaluation);
+                  if (beta <= alpha) break;
+                }
+              }
+              return minEval;
+            }
+          };
+
+          const getBestMove = () => {
+            let bestScore = -Infinity;
+            let bestMove = null;
+            const boardCopy = [...currentBoard];
+            
+            for (let i = 0; i < 9; i++) {
+              if (boardCopy[i] === null) {
+                boardCopy[i] = 'O';
+                const score = minimax(boardCopy, 0, false, -Infinity, Infinity);
+                boardCopy[i] = null;
+                if (score > bestScore) {
+                  bestScore = score;
+                  bestMove = i;
+                }
+              }
+            }
+            return bestMove;
+          };
+
+          let bestMove;
+
+          if (aiDifficulty === 0) {
+            bestMove = emptySquares[Math.floor(Math.random() * emptySquares.length)];
+          } else if (aiDifficulty === 1) {
+            bestMove = findWinningMove(currentBoard, 'O');
+            if (bestMove === null) bestMove = findWinningMove(currentBoard, 'X');
+            if (bestMove === null) {
+              bestMove = emptySquares.includes(4) ? 4 : emptySquares[Math.floor(Math.random() * emptySquares.length)];
+            }
+          } else if (aiDifficulty === 2) {
+            if (Math.random() < 0.8) {
+              bestMove = getBestMove();
+            } else {
+              bestMove = findWinningMove(currentBoard, 'O') || findWinningMove(currentBoard, 'X') || 
+                         (emptySquares.includes(4) ? 4 : emptySquares[Math.floor(Math.random() * emptySquares.length)]);
+            }
+          } else {
+            if (Math.random() < 0.9933) {
+              bestMove = getBestMove();
+            } else {
+              bestMove = findWinningMove(currentBoard, 'O') || findWinningMove(currentBoard, 'X') || 
+                         (emptySquares.includes(4) ? 4 : emptySquares[Math.floor(Math.random() * emptySquares.length)]);
+            }
           }
 
           const newBoard = [...currentBoard];
@@ -133,7 +243,7 @@
           setOMoves(aiMoves);
           setIsXNext(true);
           setIsAIThinking(false);
-        }, 500);
+        }, randomDelay);
       };
 
       const handleAIClick = (index) => {
@@ -196,9 +306,6 @@
         if (currentWinner) {
           if (gameMode === 'ai') {
             if (currentWinner === 'X') setPlayerScore(playerScore + 1);
-            else setOpponentScore(opponentScore + 1);
-          } else if (gameMode === 'playing') {
-            if (currentWinner === mySymbol) setPlayerScore(playerScore + 1);
             else setOpponentScore(opponentScore + 1);
           }
         }
@@ -291,6 +398,12 @@
         setTimeout(() => setConnectionStatus('Waiting for opponent...'), 2000);
       };
 
+      const startAIGame = () => {
+        setShowDifficultyModal(false);
+        setGameMode('ai');
+        setMySymbol('X');
+      };
+
       const winner = calculateWinner(board);
       let status = '';
       if (gameMode === 'local') {
@@ -316,7 +429,7 @@
                 <button onClick={() => setGameMode('local')} className="w-full bg-neutral-100 text-neutral-950 font-medium py-4 px-6 hover:bg-white transition-all duration-150">
                   Play Locally (Same Device)
                 </button>
-                <button onClick={() => { setGameMode('ai'); setMySymbol('X'); }} className="w-full bg-neutral-100 text-neutral-950 font-medium py-4 px-6 hover:bg-white transition-all duration-150">
+                <button onClick={() => setShowDifficultyModal(true)} className="w-full bg-neutral-100 text-neutral-950 font-medium py-4 px-6 hover:bg-white transition-all duration-150">
                   Play vs AI
                 </button>
                 <button onClick={createRoom} className="w-full bg-neutral-800 text-neutral-100 font-medium py-4 px-6 hover:bg-neutral-700 transition-all duration-150">
@@ -333,12 +446,43 @@
               {showInstallButton && (
                 <div className="mt-8 text-center">
                   <button onClick={handleInstallClick} className="w-full bg-green-600 text-white font-medium py-3 px-6 hover:bg-green-700 transition-all duration-150">
-                    Install App
+                    📱 Install App
                   </button>
                   <p className="text-neutral-500 text-xs mt-2">Install for offline play and quick access</p>
                 </div>
               )}
             </div>
+
+            {showDifficultyModal && (
+              <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50">
+                <div className="bg-neutral-900 border border-neutral-800 p-8 max-w-sm w-full mx-4">
+                  <h2 className="text-2xl font-semibold text-center mb-6 text-neutral-100">Select Difficulty</h2>
+                  <div className="mb-6">
+                    <input
+                      type="range"
+                      min="0"
+                      max="3"
+                      value={aiDifficulty}
+                      onChange={(e) => setAiDifficulty(parseInt(e.target.value))}
+                      className="w-full"
+                    />
+                    <div className="text-center mt-4">
+                      <span className={`text-2xl font-bold ${aiDifficulty === 3 ? 'text-red-500' : 'text-neutral-100'}`}>
+                        {difficultyNames[aiDifficulty]}
+                      </span>
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <button onClick={startAIGame} className="w-full bg-neutral-100 text-neutral-950 font-medium py-3 px-6 hover:bg-white transition-all duration-150">
+                      Start Game
+                    </button>
+                    <button onClick={() => setShowDifficultyModal(false)} className="w-full bg-neutral-800 text-neutral-100 font-medium py-3 px-6 hover:bg-neutral-700 transition-all duration-150">
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         );
       }
@@ -370,11 +514,13 @@
         <div className="flex flex-col items-center justify-center min-h-screen bg-neutral-950 p-4">
           <div className="w-full max-w-md">
             <h1 className="text-3xl font-semibold text-center mb-2 text-neutral-100">Infinite TacsNToes</h1>
-            {(gameMode === 'ai' || gameMode === 'playing') && (
+            
+            {gameMode === 'ai' && (
               <div className="text-center text-neutral-400 text-sm mb-6">
-                You: {playerScore} | {gameMode === 'ai' ? 'AI' : 'Opponent'}: {opponentScore}
+                You: {playerScore} | AI: {opponentScore}
               </div>
             )}
+            
             <p className="text-center text-neutral-400 mb-8 text-sm">Each player can only have 3 pieces on the board</p>
             <div className="text-xl font-medium text-center mb-6 text-neutral-200">{status}</div>
             <div className="grid grid-cols-3 gap-2 mb-6">
